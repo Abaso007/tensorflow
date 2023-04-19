@@ -30,8 +30,4 @@ def is_attrs(obj):
 
 # TODO(b/225045380): Depend on the abstracted `leaf` lib from 'nest'.
 def is_np_ndarray(value):
-  return hasattr(value, "__array__") and not (
-      # For legacy reasons we do not automatically promote Numpy strings.
-      isinstance(value, np.str_)
-      # NumPy dtypes have __array__ as unbound methods.
-      or isinstance(value, type))
+  return hasattr(value, "__array__") and not (isinstance(value, (np.str_, type)))

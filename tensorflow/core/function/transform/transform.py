@@ -309,19 +309,13 @@ def transform_eager_defined_function(
         propagate_device_spec=True,
     )
 
-  # pylint: disable=protected-access
-  # Ref: third_party/tensorflow/python/ops/control_flow_util_v2.py
-  # Generate a new `AtomicFunction`.
-  atomic = function_lib.from_func_graph(
+  return function_lib.from_func_graph(
       fndef.signature.name,
       func_graph,
       func_graph.inputs,
       func_graph.outputs,
       fndef.attr,
   )
-  # pylint: enable=protected-access
-
-  return atomic
 
 
 def _replicate_gradient_functions(
@@ -409,9 +403,7 @@ def _get_outer_most_capture(
   """Tries to find the original captured tensor."""
   outer_graph = original_graph
   while outer_graph is not None and not isinstance(capture, ops.EagerTensor):
-    if capture.graph is not outer_graph:
-      outer_graph = outer_graph.outer_graph
-    else:
+    if capture.graph is outer_graph:
       try:
         capture_index = outer_graph.internal_captures.index(capture)
       except ValueError:
@@ -419,8 +411,7 @@ def _get_outer_most_capture(
         # another external function
         break
       capture = outer_graph.external_captures[capture_index]
-      outer_graph = outer_graph.outer_graph
-
+    outer_graph = outer_graph.outer_graph
   return outer_graph, capture
 
 

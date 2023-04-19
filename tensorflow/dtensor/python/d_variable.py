@@ -223,7 +223,6 @@ class DVariable(resource_variable_ops.ResourceVariable):
           # InvalidArgument or NotFoundError depending on whether the API
           # is called within DTensor device scope or not.
           self.layout = None
-          pass
       mesh = self.layout.mesh if self.layout else None
       with api.default_mesh(mesh) if mesh else contextlib.nullcontext():
         super(DVariable, self).__init__(
