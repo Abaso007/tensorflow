@@ -96,15 +96,11 @@ class Literal(trace.TraceType, serialization.Serializable):
   def placeholder_value(self, placeholder_context) -> Any:
     # TODO(b/263505796): Remove this check when a range's placeholder output
     # is expected to be a range and not a list.
-    if isinstance(self.value, range):
-      return list(self.value)
-    return self.value
+    return list(self.value) if isinstance(self.value, range) else self.value
 
   def __eq__(self, other) -> bool:
-    if not isinstance(other, trace.TraceType):
-      return NotImplemented
-
-    return isinstance(other, Literal) and self.value == other.value
+    return (isinstance(other, Literal) and self.value == other.value
+            if isinstance(other, trace.TraceType) else NotImplemented)
 
   def __hash__(self) -> int:
     return self._value_hash
@@ -144,10 +140,7 @@ class Weakref(trace.TraceType):
     if self._ref() is None or other._ref() is None:
       return False
 
-    if self._ref() is other._ref():
-      return True
-
-    return self._ref == other._ref
+    return True if self._ref() is other._ref() else self._ref == other._ref
 
   def __hash__(self):
     return self._ref_hash
@@ -235,10 +228,8 @@ class Tuple(trace.TraceType, serialization.Serializable):
     if not isinstance(other, trace.TraceType):
       return NotImplemented
 
-    if not isinstance(other, Tuple):
-      return False
-
-    return self.components == other.components
+    return (self.components == other.components
+            if isinstance(other, Tuple) else False)
 
   def __hash__(self) -> int:
     return hash(self.components)
@@ -254,10 +245,8 @@ class List(trace.TraceType, serialization.Serializable):
     self.components_tuple = Tuple(*components)
 
   def is_subtype_of(self, other: trace.TraceType) -> bool:
-    if not isinstance(other, List):
-      return False
-
-    return self.components_tuple.is_subtype_of(other.components_tuple)
+    return (self.components_tuple.is_subtype_of(other.components_tuple)
+            if isinstance(other, List) else False)
 
   def most_specific_common_supertype(
       self, others: Sequence[trace.TraceType]) -> Optional["Tuple"]:
@@ -308,10 +297,8 @@ class List(trace.TraceType, serialization.Serializable):
     if not isinstance(other, trace.TraceType):
       return NotImplemented
 
-    if not isinstance(other, List):
-      return False
-
-    return self.components_tuple == other.components_tuple
+    return (self.components_tuple == other.components_tuple if isinstance(
+        other, List) else False)
 
   def __hash__(self) -> int:
     return hash(self.components_tuple)
@@ -341,12 +328,10 @@ class NamedTuple(trace.TraceType, serialization.Serializable):
                       attributes, named_tuple_type)
 
   def is_subtype_of(self, other: trace.TraceType) -> bool:
-    if not isinstance(other, NamedTuple):
-      return False
-
-    return (self.type_name == other.type_name and
-            self.attribute_names == other.attribute_names and
-            self.attributes.is_subtype_of(other.attributes))
+    return ((self.type_name == other.type_name
+             and self.attribute_names == other.attribute_names
+             and self.attributes.is_subtype_of(other.attributes)) if isinstance(
+                 other, NamedTuple) else False)
 
   def most_specific_common_supertype(
       self, others: Sequence[trace.TraceType]) -> Optional["NamedTuple"]:
@@ -418,14 +403,15 @@ class NamedTuple(trace.TraceType, serialization.Serializable):
     assert util.is_namedtuple(
         value
     ), f"Cannot cast {value!r} to type {self._placeholder_type!r}."
-    cast_value = {}
     value_dict = value._asdict()
     assert set(value_dict.keys()) == set(
         self.attribute_names
     ), f"{value!r} has different attributes with the TraceType {self!r}"
 
-    for k, v in zip(self.attribute_names, self.attributes.components):
-      cast_value[k] = v._cast(getattr(value, k), casting_context)  # pylint: disable=protected-access
+    cast_value = {
+        k: v._cast(getattr(value, k), casting_context)
+        for k, v in zip(self.attribute_names, self.attributes.components)
+    }
     return self._placeholder_type(**cast_value)
 
   def __hash__(self) -> int:
@@ -435,12 +421,10 @@ class NamedTuple(trace.TraceType, serialization.Serializable):
     if not isinstance(other, trace.TraceType):
       return NotImplemented
 
-    if not isinstance(other, NamedTuple):
-      return False
-
-    return (self.type_name == other.type_name and
-            self.attribute_names == other.attribute_names and
-            self.attributes == other.attributes)
+    return ((self.type_name == other.type_name
+             and self.attribute_names == other.attribute_names
+             and self.attributes == other.attributes) if isinstance(
+                 other, NamedTuple) else False)
 
   def __repr__(self):
     return (f"NamedTuple(type_name={self.type_name}, "
@@ -468,10 +452,8 @@ class Attrs(trace.TraceType):
                  attributes, attrs_type)
 
   def is_subtype_of(self, other: trace.TraceType) -> bool:
-    if not isinstance(other, Attrs):
-      return False
-
-    return self.named_attributes.is_subtype_of(other.named_attributes)
+    return (self.named_attributes.is_subtype_of(other.named_attributes)
+            if isinstance(other, Attrs) else False)
 
   def most_specific_common_supertype(
       self, others: Sequence[trace.TraceType]) -> Optional["Attrs"]:
@@ -560,10 +542,8 @@ class Attrs(trace.TraceType):
     if not isinstance(other, trace.TraceType):
       return NotImplemented
 
-    if not isinstance(other, Attrs):
-      return False
-
-    return self.named_attributes == other.named_attributes
+    return (self.named_attributes == other.named_attributes if isinstance(
+        other, Attrs) else False)
 
   def __repr__(self):
     return (f"Attrs(type_name={self.named_attributes.type_name}, "
@@ -585,23 +565,14 @@ class Dict(trace.TraceType, serialization.Serializable):
     self._placeholder_type = placeholder_type
 
   def _has_same_structure(self, other):
-    if not isinstance(other, Dict):
-      return False
-
-    return self.mapping.keys() == other.mapping.keys()
+    return (self.mapping.keys() == other.mapping.keys() if isinstance(
+        other, Dict) else False)
 
   def is_subtype_of(self, other: trace.TraceType) -> bool:
     """See base class."""
-    if not self._has_same_structure(other):
-      return False
-
-    # We need all keys to be present because there can be logic relying on
-    # their existence or lack thereof and hence can not guarantee subtype based
-    # on a subset or superset of keys.
-    # Only the tracing code can explicitly check for key dependencies and inform
-    # that decision.
-    return all(self.mapping[key].is_subtype_of(other.mapping[key])
-               for key in self.mapping)
+    return (all(
+        self.mapping[key].is_subtype_of(other.mapping[key])
+        for key in self.mapping) if self._has_same_structure(other) else False)
 
   def most_specific_common_supertype(
       self, types: Sequence[trace.TraceType]) -> Optional["Dict"]:
@@ -688,10 +659,7 @@ class Dict(trace.TraceType, serialization.Serializable):
     if not isinstance(other, trace.TraceType):
       return NotImplemented
 
-    if not isinstance(other, Dict):
-      return False
-
-    return self.mapping == other.mapping
+    return self.mapping == other.mapping if isinstance(other, Dict) else False
 
   def __hash__(self) -> int:
     return hash(frozenset(self.mapping.keys()))
