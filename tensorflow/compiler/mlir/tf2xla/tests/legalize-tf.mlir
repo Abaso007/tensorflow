@@ -774,7 +774,8 @@ func.func @einsum(%arg0: tensor<2x3xf32>, %arg1: tensor<3x4xf32>) -> tensor<2x4x
 
 // CHECK-LABEL: func @unary_einsum
 func.func @unary_einsum(%arg0: tensor<2x3xf32>) -> tensor<2x2xf32> {
-  // CHECK:  mhlo.unary_einsum
+  // CHECK:  mhlo.constant{{.*}}1.000000e+00
+  // CHECK:  mhlo.einsum{{.*}}",ab->aa"
   %0 = "tf.Einsum"(%arg0) {equation = "ab->aa"} : (tensor<2x3xf32>) -> tensor<2x2xf32>
   func.return %0: tensor<2x2xf32>
 }
@@ -2633,35 +2634,6 @@ func.func @bitcast_smaller_output_width(%arg0: tensor<2xf32>) -> tensor<2x2xf16>
   // CHECK:  mhlo.bitcast_convert %arg0 : (tensor<2xf32>) -> tensor<2x2xf16>
   %0 = "tf.Bitcast"(%arg0) : (tensor<2xf32>) -> tensor<2x2xf16>
   func.return %0 : tensor<2x2xf16>
-}
-
-// -----
-
-// CHECK-LABEL: reshape
-func.func @reshape(%arg0: tensor<2xf32>, %arg1: tensor<2xi32>) -> tensor<2x1xf32> {
-  // CHECK:  mhlo.reshape
-  %0 = "tf.Reshape"(%arg0, %arg1) : (tensor<2xf32>, tensor<2xi32>) -> tensor<2x1xf32>
-  func.return %0 : tensor<2x1xf32>
-}
-
-// -----
-
-// CHECK-LABEL: not_lowering_reshape
-func.func @not_lowering_reshape(%arg0: tensor<!tf_type.string>, %arg1: tensor<1xi32>) -> tensor<1x!tf_type.string> {
-  // CHECK:  "tf.Reshape"
-  %0 = "tf.Reshape"(%arg0, %arg1) : (tensor<!tf_type.string>, tensor<1xi32>) -> tensor<1x!tf_type.string>
-  func.return %0 : tensor<1x!tf_type.string>
-}
-
-// -----
-
-// CHECK-LABEL: reshape_dynamic
-func.func @reshape_dynamic(%arg0: tensor<?xf32>, %arg1: tensor<2xi32>) -> tensor<?x?xf32> {
-  // CHECK:  "chlo.dynamic_reshape"
-  // CHLO:  mhlo.compute_reshape_shape
-  // CHLO:  mhlo.dynamic_reshape
-  %0 = "tf.Reshape"(%arg0, %arg1) : (tensor<?xf32>, tensor<2xi32>) -> tensor<?x?xf32>
-  func.return %0 : tensor<?x?xf32>
 }
 
 // -----
