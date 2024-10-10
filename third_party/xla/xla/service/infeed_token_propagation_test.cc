@@ -177,6 +177,59 @@ ENTRY main {
   EXPECT_THAT(false_comp->root_instruction(), op::Tuple(op::AfterAll()));
 }
 
+TEST_F(InfeedTokenPropagationTest, ConditionalDuplicateOperand) {
+  constexpr std::string_view hlo = R"(
+HloModule main
+
+true_comp {
+  arg.0 = () parameter(0)
+  token.0 = after-all()
+  infeed.0 = (s32[], token[]) infeed(token.0)
+  ROOT tuple.0 = tuple()
+}
+
+false_comp {
+  arg.0 = () parameter(0)
+  ROOT tuple.0 = tuple()
+}
+
+ENTRY main {
+  pred.0 = pred[] constant(true)
+  tuple.0 = tuple()
+  ROOT cond.0 = () conditional(pred.0, tuple.0, tuple.0), true_computation=true_comp, false_computation=false_comp
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(auto module, ParseAndReturnVerifiedModule(hlo));
+  InfeedTokenPropagation itp;
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, itp.Run(module.get()));
+  EXPECT_TRUE(changed);
+
+  // The infeed output token should have propagated through the conditional.
+  HloInstruction* cond = FindInstruction(module.get(), "cond.0");
+  EXPECT_EQ(cond->shape().tuple_shapes_size(), 1);
+  EXPECT_TRUE(cond->shape().tuple_shapes()[0].IsToken());
+
+  // The infeed input token should have propagated through the true tuple.
+  const HloInstruction* true_tuple = cond->operand(1);
+  EXPECT_EQ(true_tuple->shape().tuple_shapes_size(), 1);
+  EXPECT_TRUE(true_tuple->shape().tuple_shapes()[0].IsToken());
+
+  // The infeed input token should not have propagated through the false tuple.
+  const HloInstruction* false_tuple = cond->operand(2);
+  EXPECT_EQ(false_tuple->shape().tuple_shapes_size(), 0);
+
+  // The infeed output token should have propagated through the true
+  // computation's root.
+  HloComputation* true_comp = FindComputation(module.get(), "true_comp");
+  EXPECT_THAT(true_comp->root_instruction(),
+              op::Tuple(op::GetTupleElement(op::Infeed(), 1)));
+
+  // The infeed output token should have propagated to the false computation's
+  // root.
+  HloComputation* false_comp = FindComputation(module.get(), "false_comp");
+  EXPECT_THAT(false_comp->root_instruction(), op::Tuple(op::AfterAll()));
+}
+
 TEST_F(InfeedTokenPropagationTest, NonTupleConditional) {
   constexpr std::string_view hlo = R"(
 HloModule main
@@ -533,8 +586,7 @@ comp {
   pred.0 = pred[] constant(true)
   true_tuple.0 = tuple(gte.0)
   false_tuple.0 = tuple()
-  cond.0 = () conditional(pred.0, true_tuple.0, false_tuple.0), true_computation=true_comp, false_computation=false_comp
-  ROOT tuple.0 = tuple()
+  ROOT cond.0 = () conditional(pred.0, true_tuple.0, false_tuple.0), true_computation=true_comp, false_computation=false_comp
 }
 
 cond {
