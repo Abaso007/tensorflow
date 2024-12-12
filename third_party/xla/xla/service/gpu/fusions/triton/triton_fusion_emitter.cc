@@ -98,6 +98,7 @@ limitations under the License.
 #include "xla/service/gpu/fusions/ir/xla_gpu_ops.h"
 #include "xla/service/gpu/fusions/mlir/elemental_hlo_to_mlir.h"
 #include "xla/service/gpu/fusions/transforms/passes.h"
+#include "xla/service/gpu/fusions/triton/compilation_pipeline.h"
 #include "xla/service/gpu/fusions/triton/emitter_helpers.h"
 #include "xla/service/gpu/fusions/triton/passes.h"
 #include "xla/service/gpu/fusions/triton/triton_fusion_emitter_legacy_matmul.h"
@@ -1196,6 +1197,8 @@ absl::StatusOr<TritonWrapperResult> CompileTritonToLLVM(
     mlir::ModuleOp triton_module, llvm::Module* llvm_module,
     mlir::MLIRContext& mlir_context, bool emit_kernel) {
   const auto& cc = device_info.gpu_compute_capability();
+  const std::string arch_name =
+      std::visit([](auto& cc) { return cc.ToString(); }, cc);
   if (std::holds_alternative<se::CudaComputeCapability>(cc)) {
     auto ccCuda = std::get<se::CudaComputeCapability>(cc);
     if (!ccCuda.IsAtLeastAmpere()) {
@@ -1255,7 +1258,9 @@ absl::StatusOr<TritonWrapperResult> CompileTritonToLLVM(
   pm.addPass(CreateSimplifyAffinePass());
 
   mlir::triton::nvidia_gpu::ClusterInfo cluster_info;
-  if (!CreateTritonPipeline(pm, cc, block_level_parameters, cluster_info)
+  if (!CreateTritonPipeline(&pm, arch_name, block_level_parameters.num_warps,
+                            block_level_parameters.num_ctas,
+                            block_level_parameters.num_stages, cluster_info)
            .ok()) {
     return Internal("Failed to create Triton pipeline.");
   }

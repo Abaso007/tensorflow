@@ -23,6 +23,7 @@ limitations under the License.
 #include "xla/hlo/utils/hlo_traversal.h"
 #include "xla/literal.h"
 #include "xla/literal_util.h"
+#include "xla/service/gpu/fusions/triton/compilation_pipeline.h"
 #include "xla/service/gpu/fusions/triton/triton_fusion_emitter.h"
 #include "xla/service/gpu/fusions/triton/triton_fusion_emitter_legacy_matmul.h"
 #include "xla/service/gpu/model/tiled_hlo_instruction.h"
@@ -50,7 +51,7 @@ TEST(TritonStub, CallStubApi) {
   mlir::OpPassManager pm;
   ::mlir::triton::nvidia_gpu::ClusterInfo cluster_info;
 
-  EXPECT_FALSE(CreateTritonPipeline(pm, {}, {}, cluster_info).ok());
+  EXPECT_FALSE(CreateTritonPipeline(&pm, "", 1, 1, 1, cluster_info).ok());
   EXPECT_EQ(GetLibdevicePath({}, {}), "");
 
   mlir::ImplicitLocOpBuilder builder(mlir::UnknownLoc::get(&context), &context);
