@@ -71,6 +71,7 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/framework/allocator.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/util.h"
 #include "xla/xla.pb.h"
 #include "xla/xla_data.pb.h"
@@ -688,10 +689,10 @@ absl::StatusOr<Layout> PjRtCApiClient::GetDefaultLayout(
 
   std::string serialized_layout(serialize_args.serialized_bytes,
                                 serialize_args.serialized_bytes_size);
-  TF_ASSIGN_OR_RETURN(PjRtXlaLayout pjrt_xla_layout,
-                      PjRtXlaLayout::Deserialize(serialized_layout));
+  TF_ASSIGN_OR_RETURN(std::shared_ptr<const PjRtLayout> pjrt_layout,
+                      PjRtLayout::Deserialize(serialized_layout));
 
-  return pjrt_xla_layout.xla_layout();
+  return pjrt_layout->xla_layout();
 }
 
 class PjRtCApiAsyncHostToDeviceTransferManager
@@ -1013,22 +1014,36 @@ absl::string_view PjRtCApiDeviceDescription::ToString() const {
   return to_string;
 }
 
-absl::Span<const PjRtMemorySpaceDescription* const>
-PjRtCApiDeviceDescription::memory_spaces() const {
+void PjRtCApiDeviceDescription::InitMemoryDescriptions() const {
   const PJRT_MemoryDescriptions_Extension* extension =
       pjrt::FindExtension<PJRT_MemoryDescriptions_Extension>(
           c_api_, PJRT_Extension_Type::PJRT_Extension_Type_MemoryDescriptions);
-  if (!extension) return {};
+  if (!extension) return;
 
   if (memory_space_description_pointers_.empty()) {
-    memory_space_descriptions_ =
-        pjrt::GetMemorySpaceDescriptions(device_description_, c_api_);
+    memory_space_descriptions_ = pjrt::GetMemorySpaceDescriptions(
+        device_description_, c_api_, &default_memory_space_description_);
     for (int i = 0; i < memory_space_descriptions_.size(); i++) {
       memory_space_description_pointers_.push_back(
           &memory_space_descriptions_[i]);
     }
   }
+}
+
+absl::Span<const PjRtMemorySpaceDescription* const>
+PjRtCApiDeviceDescription::memory_spaces() const {
+  if (memory_space_description_pointers_.empty()) {
+    InitMemoryDescriptions();
+  }
   return memory_space_description_pointers_;
+}
+
+absl::StatusOr<const PjRtMemorySpaceDescription*>
+PjRtCApiDeviceDescription::default_memory_space() const {
+  if (memory_space_description_pointers_.empty()) {
+    InitMemoryDescriptions();
+  }
+  return default_memory_space_description_;
 }
 
 // ------------------------------- Devices -------------------------------------
@@ -2030,7 +2045,7 @@ std::shared_ptr<const PjRtLayout> PjRtCApiBuffer::layout() const {
           pjrt::FindExtension<PJRT_Layouts_Extension>(
               c_api, PJRT_Extension_Type::PJRT_Extension_Type_Layouts);
       if (extension == nullptr) {
-        layout_ = std::make_shared<PjRtXlaLayout>(
+        layout_ = std::make_shared<PjRtLayout>(
             LayoutUtil::MakeDescendingLayout(dimensions().size()));
       } else {
         std::unique_ptr<PJRT_Layouts_MemoryLayout,
@@ -2056,10 +2071,10 @@ std::shared_ptr<const PjRtLayout> PjRtCApiBuffer::layout() const {
 
         std::string serialized_layout(serialize_args.serialized_bytes,
                                       serialize_args.serialized_bytes_size);
-        absl::StatusOr<PjRtXlaLayout> pjrt_xla_layout =
-            PjRtXlaLayout::Deserialize(serialized_layout);
-        TF_CHECK_OK(pjrt_xla_layout.status());
-        layout_ = std::make_shared<PjRtXlaLayout>(*std::move(pjrt_xla_layout));
+        absl::StatusOr<std::shared_ptr<const PjRtLayout>> pjrt_layout =
+            PjRtLayout::Deserialize(serialized_layout);
+        TF_CHECK_OK(pjrt_layout.status());
+        layout_ = *std::move(pjrt_layout);
       }
     }
   }

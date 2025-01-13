@@ -680,6 +680,7 @@ ENTRY main {
     DebugOptions debug_options = GetDebugOptionsForTest();
     debug_options.set_xla_gpu_cublas_fallback(enable_blas_fallback);
     debug_options.set_xla_gpu_enable_triton_gemm(enable_triton);
+    debug_options.set_xla_gpu_cudnn_gemm_fusion_level(0);
     if (!enable_blas) {
       debug_options.add_xla_disable_hlo_passes("cublas-gemm-rewriter");
     }
@@ -1552,6 +1553,19 @@ TEST_F(PassOrderTest, GemmRewriterRunsAfterDotNormalizer) {
       /*first_pass_regex=*/"dot_normalizer",
       /*last_pass_regex=*/"cublas-gemm-rewriter");
   VerifyNotRunInBetween(pass_range, /*pass_regex=*/"algsimp");
+}
+
+TEST_F(PassOrderTest,
+       ReducePrecisionIsRemovedAfterAllCallsToSimplifyFPConversions) {
+  // Because of an issue with JAX remat and `SimplifyFPConversions` (see PR:
+  // https://github.com/jax-ml/jax/pull/22244), we can only eliminate the
+  // no-op reduce-precision operations after the last call to
+  // `SimplifyFPConversions`. No-op reduce-precisions are removed within
+  // algebraic simplifier, if the option to remove them is set. In the compiler
+  // pipeline, this is done as a subpipeline, which should be after the last
+  // invocation of SimplifyFPConversions.
+  VerifyPassOrder("simplify-fp-conversions",
+                  "remove-no-op-reduce-precision-algebraic-simplifier");
 }
 
 }  // namespace

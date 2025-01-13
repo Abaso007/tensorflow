@@ -1649,8 +1649,7 @@ absl::Status GpuCompiler::OptimizeHloPostLayoutAssignment(
   // also have unsorted update_window_dims.
   pipeline.AddPass<ScatterSimplifier>();
 
-  pipeline.AddPass<HostOffloader>(
-      static_cast<int64_t>(stream_executor::MemoryType::kHost));
+  pipeline.AddPass<HostOffloader>();
 
   TF_RETURN_IF_ERROR(
       AddConvAndGemmAutotuningPasses(&pipeline, gpu_version, options,
@@ -1674,6 +1673,22 @@ absl::Status GpuCompiler::OptimizeHloPostLayoutAssignment(
     // simplifier by rearranging ops (i.e. by pushing broadcasts towards the
     // root).
     pipeline.AddPass<SimplifyFPConversions>();
+  }
+
+  {
+    // Because of an issue with JAX remat and `SimplifyFPConversions` (see PR:
+    // https://github.com/jax-ml/jax/pull/22244), we can only eliminate the
+    // no-op reduce-precision operations after the last call to
+    // `SimplifyFPConversions`. We are creating a sub-pipeline here because that
+    // allows us to test this order in a unit test.
+    HloPassPipeline& remove_no_op_reduce_precision_pipeline =
+        pipeline.AddPass<HloPassPipeline>(
+            "remove-no-op-reduce-precision-algebraic-simplifier");
+    AlgebraicSimplifierOptions simplifier_options_{simplifier_options};
+    simplifier_options_.set_enable_remove_no_op_reduce_precision(true);
+    remove_no_op_reduce_precision_pipeline
+        .AddPass<HloPassFix<GpuAlgebraicSimplifier>>(simplifier_options_,
+                                                     gpu_version);
   }
 
   pipeline.AddPass<HloCSE>(/*is_layout_sensitive=*/true);

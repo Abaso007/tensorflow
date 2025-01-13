@@ -32,7 +32,7 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/backends/gpu/collectives/gpu_clique_key.h"
-#include "xla/backends/gpu/collectives/gpu_clique_locking.h"
+#include "xla/backends/gpu/collectives/gpu_cliques.h"
 #include "xla/backends/gpu/collectives/gpu_collectives.h"
 #include "xla/core/collectives/communicator.h"
 #include "xla/core/collectives/rank_id.h"
@@ -202,9 +202,9 @@ class Thunk {
   // Each individual thunk can request various resources required for execution
   // at prepare stage. XLA executable is responsible for allocating them before
   // initializing and executing thunks.
-  class ResourceRequests {
+  class ResourceRequestsInterface {
    public:
-    virtual ~ResourceRequests() = default;
+    virtual ~ResourceRequestsInterface() = default;
     virtual absl::Status AddClique(const GpuCliqueKey& clique_key,
                                    int32_t num_local_participants) = 0;
   };
@@ -460,7 +460,7 @@ class Thunk {
   // requests up to the parent executable so it can acquire them before
   // initialization and execution.
   virtual absl::Status Prepare(const PrepareParams& params,
-                               ResourceRequests& resource_requests) {
+                               ResourceRequestsInterface& resource_requests) {
     return absl::OkStatus();
   }
 

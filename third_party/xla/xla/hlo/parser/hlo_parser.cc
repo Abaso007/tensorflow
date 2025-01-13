@@ -4586,6 +4586,9 @@ bool HloParserImpl::ParseDenseLiteral(Literal* literal, const Shape& shape) {
         }
         elems_seen_per_dim[0] = shape.dimensions(0);
         lexer_.Lex();
+        if (!options_.fill_shortform_constants_with_random_values()) {
+          break;
+        }
         // Fill data with deterministic (garbage) values. Use static to avoid
         // creating identical constants which could potentially got CSE'ed
         // away. This is a best-effort approach to make sure replaying a HLO
@@ -6488,18 +6491,25 @@ bool HloParserImpl::ParseOriginalValue(
       ++leaf_shape_index.back();
     } else if (lexer_.GetKind() == TokKind::kLbrace) {
       lexer_.Lex();
-      std::string instruction_name;
-      ShapeIndex shape_index;
-      if (!ParseString(&instruction_name)) {
-        return false;
-      }
       if (lexer_.GetKind() != TokKind::kRbrace) {
-        if (!ParseShapeIndex(&shape_index)) {
+        std::string instruction_name;
+        ShapeIndex shape_index;
+        if (!ParseString(&instruction_name)) {
           return false;
         }
+        if (lexer_.GetKind() != TokKind::kRbrace) {
+          if (!ParseShapeIndex(&shape_index)) {
+            return false;
+          }
+        }
+        *(**original_value)->mutable_element(leaf_shape_index) = {
+            instruction_name, shape_index};
+      } else {
+        // The original_value is not expected to have any leaf without values.
+        // However we should not fail the execution here. This should
+        // be done in HloVerifier instead.
+        LOG(WARNING) << "Found an empty leaf node in an original value";
       }
-      *(**original_value)->mutable_element(leaf_shape_index) = {
-          instruction_name, shape_index};
       if (!ParseToken(TokKind::kRbrace,
                       "Expects '} at end of each OriginalArray'")) {
         return false;
@@ -6522,7 +6532,6 @@ bool HloParserImpl::ParseMetadata(OpMetadata& metadata) {
   optional<int32_t> source_line;
   optional<std::vector<int64_t>> profile_type;
   optional<std::string> deduplicated_name;
-  optional<bool> preserve_layout;
   optional<std::string> scheduling_name;
   attrs["op_type"] = {/*required=*/false, AttrTy::kString, &op_type};
   attrs["op_name"] = {/*required=*/false, AttrTy::kString, &op_name};
@@ -6532,8 +6541,6 @@ bool HloParserImpl::ParseMetadata(OpMetadata& metadata) {
                            &profile_type};
   attrs["deduplicated_name"] = {/*required=*/false, AttrTy::kString,
                                 &deduplicated_name};
-  attrs["preserve_layout"] = {/*required=*/false, AttrTy::kBool,
-                              &preserve_layout};
   attrs["scheduling_name"] = {/*required=*/false, AttrTy::kString,
                               &scheduling_name};
   if (!ParseSubAttributes(attrs)) {
@@ -6561,11 +6568,6 @@ bool HloParserImpl::ParseMetadata(OpMetadata& metadata) {
   }
   if (deduplicated_name) {
     metadata.set_deduplicated_name(*deduplicated_name);
-  }
-  if (preserve_layout) {
-    metadata.set_preserve_layout(*preserve_layout);
-  } else {
-    metadata.set_preserve_layout(false);
   }
   if (scheduling_name) {
     metadata.set_scheduling_name(*scheduling_name);

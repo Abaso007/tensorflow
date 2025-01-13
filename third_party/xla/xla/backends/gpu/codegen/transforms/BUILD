@@ -38,6 +38,7 @@ gentbl_cc_library(
 cc_library(
     name = "passes",
     srcs = [
+        "atomic_rmw_utils.cc",
         "convert_float_nvidia.cc",
         "convert_xla_gpu_pure_call_ops.cc",
         "erase_dead_functions.cc",
@@ -64,13 +65,13 @@ cc_library(
         "//xla:util",
         "//xla:xla_data_proto_cc",
         "//xla/backends/gpu/codegen/ir:xla_gpu",
+        "//xla/codegen/emitters:elemental_hlo_to_mlir",
         "//xla/codegen/ir:xla",
         "//xla/hlo/analysis:indexing_analysis",
         "//xla/mlir_hlo",
         "//xla/mlir_hlo:map_mhlo_to_scalar_op",
         "//xla/service/gpu:gpu_fusible",
         "//xla/service/gpu:ir_emission_utils",
-        "//xla/service/gpu/fusions/mlir:elemental_hlo_to_mlir",
         "//xla/service/gpu/llvm_gpu_backend",
         "//xla/stream_executor:device_description",
         "//xla/stream_executor:semantic_version",

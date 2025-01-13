@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -323,7 +324,7 @@ absl::StatusOr<IndexingMapWithAdditions> GetNewIndexingMapAfterFoldingSequence(
         replacement_expr =
             getAffineDimExpr(num_dims + added_dim_args.size(), ctx);
         added_dim_args.push_back(producer_operand.get());
-        new_dim_vars.push_back(producer_map.GetDimVars(dim_num));
+        new_dim_vars.push_back(producer_map.GetDimVar(dim_num));
       }
       producer_dim_replacements.push_back(replacement_expr);
     }
@@ -529,7 +530,7 @@ struct FoldApplyIndexingOperands
       } else {
         new_operands.push_back(operand.get());
         dim_replacements.push_back(getAffineDimExpr(new_num_dims++, ctx));
-        new_dim_vars.push_back(indexing_map.GetDimVars(operand_id));
+        new_dim_vars.push_back(indexing_map.GetDimVar(operand_id));
       }
     }
     rewriter.replaceOpWithNewOp<ApplyIndexingOp>(

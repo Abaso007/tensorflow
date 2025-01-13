@@ -159,7 +159,7 @@ class NcclCollectiveThunk : public Thunk {
       const Thunk::CollectiveExecuteParams& params);
 
   absl::Status Prepare(const PrepareParams& params,
-                       ResourceRequests& resource_requests) override;
+                       ResourceRequestsInterface& resource_requests) override;
 
   absl::Status Initialize(const InitializeParams& params) override;
 
@@ -210,7 +210,7 @@ class NcclCollectiveThunk : public Thunk {
   //
   // TODO(ezhulenev): Try to move this flag to NCCL clique as we need to make
   // sure that all NCCL resources are allocated just once.
-  RendezvousSingleFlag first_call_rendezvous_flag_;
+  RendezvousFlag first_call_rendezvous_flag_;
 };
 
 //===----------------------------------------------------------------------===//

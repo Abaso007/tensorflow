@@ -59,8 +59,8 @@ std::string SequentialThunk::ToString(int indent) const {
   return result;
 }
 
-absl::Status SequentialThunk::Prepare(const PrepareParams& params,
-                                      ResourceRequests& resource_requests) {
+absl::Status SequentialThunk::Prepare(
+    const PrepareParams& params, ResourceRequestsInterface& resource_requests) {
   for (auto& thunk : thunks_) {
     TF_RETURN_IF_ERROR(thunk->Prepare(params, resource_requests));
   }
@@ -75,6 +75,8 @@ absl::Status SequentialThunk::Initialize(const InitializeParams& params) {
 }
 
 absl::Status SequentialThunk::ExecuteOnStream(const ExecuteParams& params) {
+  std::optional<tsl::profiler::ScopedAnnotation> seq_annotation =
+      GetKernelAnnotation(profile_annotation());
   for (const std::unique_ptr<Thunk>& thunk : thunks_) {
     std::optional<tsl::profiler::ScopedAnnotation> annotation =
         GetKernelAnnotation(thunk->profile_annotation());
