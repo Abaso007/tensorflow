@@ -165,10 +165,11 @@ std::vector<std::vector<PjRtBuffer*>> BufferMatToPointerMat(
 class PjRtWrappedExecutable : public Executable {
  public:
   // Takes ownership of the provided executable.
-  explicit PjRtWrappedExecutable(std::shared_ptr<HloModule> hlo_module,
-                                 PjRtLoadedExecutable* pjrt_loaded_executable)
+  explicit PjRtWrappedExecutable(
+      std::shared_ptr<HloModule> hlo_module,
+      std::unique_ptr<PjRtLoadedExecutable> pjrt_loaded_executable)
       : Executable(hlo_module),
-        pjrt_loaded_executable_(pjrt_loaded_executable) {}
+        pjrt_loaded_executable_(std::move(pjrt_loaded_executable)) {}
 
   absl::StatusOr<ExecutionOutput> ExecuteAsyncOnStream(
       const ServiceExecutableRunOptions* run_options,
@@ -320,8 +321,10 @@ absl::StatusOr<Literal> HloRunnerPjRt::Execute(
     std::unique_ptr<HloModule> module,
     absl::Span<const Literal* const> arguments, bool run_hlo_passes,
     ExecutionProfile* profile) {
-  // TODO (b/245550554) : Remove UpdateEntryComputationLayout from runner.
-  UpdateEntryComputationLayout(module.get());
+  if (run_hlo_passes) {
+    // TODO - b/391868033: Remove calls to UpdateEntryComputationLayout.
+    UpdateEntryComputationLayout(module.get());
+  }
   TF_ASSIGN_OR_RETURN(auto executable,
                       CreateExecutable(std::move(module), run_hlo_passes));
 
@@ -400,7 +403,7 @@ absl::StatusOr<std::unique_ptr<Executable>> HloRunnerPjRt::CreateExecutable(
   auto executable = std::make_unique<PjRtWrappedExecutable>(
       std::shared_ptr<HloModule>(
           std::move(pjrt_executable->GetHloModules().value()[0])),
-      pjrt_executable.release());
+      std::move(pjrt_executable));
 
   return executable;
 }
@@ -408,7 +411,10 @@ absl::StatusOr<std::unique_ptr<Executable>> HloRunnerPjRt::CreateExecutable(
 absl::StatusOr<std::vector<Literal>> HloRunnerPjRt::ExecuteReplicated(
     std::unique_ptr<HloModule> module,
     const HloRunnerInterface::ReplicatedExecuteOptions& options) {
-  UpdateEntryComputationLayout(module.get());
+  if (options.run_hlo_passes) {
+    // TODO - b/391868033: Remove calls to UpdateEntryComputationLayout.
+    UpdateEntryComputationLayout(module.get());
+  }
 
   TF_ASSIGN_OR_RETURN(
       auto device_assignment,
