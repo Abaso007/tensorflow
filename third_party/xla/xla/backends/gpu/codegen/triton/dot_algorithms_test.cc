@@ -50,6 +50,7 @@ limitations under the License.
 #include "xla/service/gpu/backend_configs.pb.h"
 #include "xla/service/gpu/tests/gpu_codegen_test.h"
 #include "xla/service/hlo_module_config.h"
+#include "xla/stream_executor/cuda/cuda_compute_capability.h"
 #include "xla/stream_executor/device_description.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/tsl/platform/statusor.h"
@@ -101,7 +102,7 @@ class AlgorithmTest : public GpuCodegenTest {
     } else {
       return stream_executor::GpuComputeCapability{
           stream_executor::CudaComputeCapability{
-              stream_executor::CudaComputeCapability::AMPERE, 0}};
+              stream_executor::CudaComputeCapability::kAmpere, 0}};
     }
   }
 
@@ -237,17 +238,18 @@ TEST_F(BlasAlgorithmTest, Algorithm_BF16_BF16_F32) {
   using CudaComputeCapabilities =
       stream_executor::CudaComputeCapability::CudaComputeCapabilities;
   switch (cc.major) {
-    case CudaComputeCapabilities::BLACKWELL:
-      GTEST_SKIP() << "CudaComputeCapabilities::BLACKWELL has the kernel name: "
-                   << kernel_names[0];
+    case CudaComputeCapabilities::kBlackwell:
+      GTEST_SKIP()
+          << "CudaComputeCapabilities::kBlackwell has the kernel name: "
+          << kernel_names[0];
       break;
-    case CudaComputeCapabilities::AMPERE:
+    case CudaComputeCapabilities::kAmpere:
       EXPECT_THAT(kernel_names, ::testing::UnorderedElementsAre(
                                     ::testing::Eq("wrapped_convert"),
                                     ::testing::Eq("wrapped_convert_1"),
                                     ::testing::HasSubstr("gemm_bf16_")));
       break;
-    case CudaComputeCapabilities::HOPPER:
+    case CudaComputeCapabilities::kHopper:
       // Convert to bf16+cublas works faster than dot with algorithm.
       EXPECT_THAT(kernel_names,
                   ::testing::Contains(::testing::HasSubstr("wrapped_convert"))
@@ -283,7 +285,11 @@ TEST_F(AlgorithmTest, Algorithm_BF16_BF16_F32_on_BF16_input_for_multiply) {
     CHECK:    %[[reduce:.*]] = f32[256]{0} reduce(
   )";
   TF_ASSERT_OK_AND_ASSIGN(auto module, GetOptimizedModule(kHloText));
-  TF_ASSERT_OK_AND_ASSIGN(auto ok, RunFileCheck(module->ToString(), pattern));
+  TF_ASSERT_OK_AND_ASSIGN(
+      auto ok,
+      RunFileCheck(
+          module->ToString(HloPrintOptions().set_print_operand_shape(true)),
+          pattern));
   ASSERT_TRUE(ok);
   EXPECT_TRUE(RunAndCompareNoHloPasses(
       std::move(module), ErrorSpec{/*aabs=*/1e-7, /*arel=*/1e-7}));
@@ -326,15 +332,16 @@ TEST_F(BlasAlgorithmTest, Algorithm_BF16_BF16_F32_X3) {
   using CudaComputeCapabilities =
       stream_executor::CudaComputeCapability::CudaComputeCapabilities;
   switch (cc.major) {
-    case CudaComputeCapabilities::BLACKWELL:
-      GTEST_SKIP() << "CudaComputeCapabilities::BLACKWELL has the kernel name: "
-                   << kernel_names[0];
+    case CudaComputeCapabilities::kBlackwell:
+      GTEST_SKIP()
+          << "CudaComputeCapabilities::kBlackwell has the kernel name: "
+          << kernel_names[0];
       break;
-    case CudaComputeCapabilities::AMPERE:
+    case CudaComputeCapabilities::kAmpere:
       ASSERT_EQ(kernel_names.size(), 1);
       EXPECT_THAT(kernel_names[0], ::testing::Eq("loop_convert_fusion_1"));
       break;
-    case CudaComputeCapabilities::HOPPER:
+    case CudaComputeCapabilities::kHopper:
       EXPECT_THAT(kernel_names,
                   ::testing::Contains(::testing::Eq("loop_convert_fusion_1")));
       break;
@@ -381,15 +388,16 @@ TEST_F(BlasAlgorithmTest, Algorithm_BF16_BF16_F32_X6) {
   using CudaComputeCapabilities =
       stream_executor::CudaComputeCapability::CudaComputeCapabilities;
   switch (cc.major) {
-    case CudaComputeCapabilities::BLACKWELL:
-      GTEST_SKIP() << "CudaComputeCapabilities::BLACKWELL has the kernel name: "
-                   << kernel_names[0];
+    case CudaComputeCapabilities::kBlackwell:
+      GTEST_SKIP()
+          << "CudaComputeCapabilities::kBlackwell has the kernel name: "
+          << kernel_names[0];
       break;
-    case CudaComputeCapabilities::AMPERE:
+    case CudaComputeCapabilities::kAmpere:
       ASSERT_EQ(kernel_names.size(), 1);
       EXPECT_THAT(kernel_names[0], ::testing::Eq("loop_convert_fusion_1"));
       break;
-    case CudaComputeCapabilities::HOPPER:
+    case CudaComputeCapabilities::kHopper:
       EXPECT_THAT(
           kernel_names,
           ::testing::Contains(::testing::HasSubstr("loop_convert_fusion")));
@@ -437,15 +445,16 @@ TEST_F(BlasAlgorithmTest, Algorithm_TF32_TF32_F32_X3) {
   using CudaComputeCapabilities =
       stream_executor::CudaComputeCapability::CudaComputeCapabilities;
   switch (cc.major) {
-    case CudaComputeCapabilities::BLACKWELL:
-      GTEST_SKIP() << "CudaComputeCapabilities::BLACKWELL has the kernel name: "
-                   << kernel_names[0];
+    case CudaComputeCapabilities::kBlackwell:
+      GTEST_SKIP()
+          << "CudaComputeCapabilities::kBlackwell has the kernel name: "
+          << kernel_names[0];
       break;
-    case CudaComputeCapabilities::AMPERE:
+    case CudaComputeCapabilities::kAmpere:
       EXPECT_THAT(kernel_names, ::testing::Contains(::testing::HasSubstr(
                                     "bitcast_convert_subtract")));
       break;
-    case CudaComputeCapabilities::HOPPER:
+    case CudaComputeCapabilities::kHopper:
       EXPECT_THAT(kernel_names,
                   ::testing::UnorderedElementsAre(
                       ::testing::HasSubstr("bitcast_convert_subtract"),
