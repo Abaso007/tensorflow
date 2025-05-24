@@ -202,14 +202,21 @@ absl::Status CheckGapBetweenAnnotatedInstructions(
         for (const PtrVec<HloInstruction*>& users :
              {instr->users(), instr->control_successors()}) {
           for (HloInstruction* user : users) {
+            const auto log_inst = [&](HloInstruction* inst) {
+              LOG(INFO) << "PATH: " << inst->name() << ", annotation: "
+                        << GetSchedulingAnnotation(inst)
+                               ->value_or(Annotation{})
+                               .ToString();
+            };
+
             if (instruction_to_annotation.contains(user) &&
                 instruction_to_annotation.at(user) == annotation) {
-              LOG(INFO) << "PATH: " << user->name();
+              log_inst(user);
               HloInstruction* current = instr;
-              LOG(INFO) << "PATH: " << current->name();
+              log_inst(current);
               while (parent.contains(current)) {
                 current = parent[current];
-                LOG(INFO) << "PATH: " << current->name();
+                log_inst(current);
               }
               return absl::UnimplementedError(absl::StrCat(
                   "Support for annotation groups with gaps doesn't "
@@ -324,12 +331,19 @@ bool LegalizeSchedulingAnnotations::KeepSchedulingAnnotation(
 absl::StatusOr<bool> LegalizeSchedulingAnnotations::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
+  bool changed = false;
+  // Remove loop iteration annotation if requested.
+  if (config_.remove_loop_iteration_annotation_only) {
+    TF_ASSIGN_OR_RETURN(bool removed, RemoveLoopIterationAnnotation(module));
+    changed |= removed;
+    return changed;
+  }
+
   absl::flat_hash_map<HloInstruction*, Annotation> instruction_to_annotation;
   absl::flat_hash_map<
       Annotation,
       absl::flat_hash_map<HloComputation*, std::vector<HloInstruction*>>>
       annotation_to_instruction;
-  bool changed = false;
   // Filter the annotated ops (using config) to keep the annotations only in the
   // desired sync ops. Annotations in all async ops are kept.
   for (HloComputation* computation : module->MakeNonfusionComputations()) {
@@ -338,13 +352,6 @@ absl::StatusOr<bool> LegalizeSchedulingAnnotations::Run(
         changed |= RemoveSchedulingAnnotation(instr);
       }
     }
-  }
-
-  // Remove loop iteration annotation if needed.
-  if (config_.remove_loop_iteration_annotation) {
-    TF_ASSIGN_OR_RETURN(bool remove_loop_iteration_annotation,
-                        RemoveLoopIterationAnnotation(module));
-    changed |= remove_loop_iteration_annotation;
   }
 
   // Find the annotated instructions and save relevant information.
